@@ -46,6 +46,7 @@ The custom app uses this directory:
 
 It does not automatically open the installed app's graphs.
 Its launcher separates preferences, plugins, and graph storage.
+It preserves the real home directory so macOS can access the normal Keychain.
 It does not install the CLI, register the stock protocol, or enable upstream application updates.
 
 For tests, `LOGSEQ_INLINE_DATA_DIR` selects another isolated directory.

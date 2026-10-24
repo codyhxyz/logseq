@@ -4,13 +4,15 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
+const { execFileSync } = require('node:child_process')
 
 async function main () {
   const desktop = Boolean(process.env.LOGSEQ_ELECTRON_EXECUTABLE)
+  const testRoot = desktop ? fs.mkdtempSync(path.join(os.tmpdir(), 'logseq-inline-test-')) : null
   const browser = desktop
     ? await electron.launch({
       executablePath: process.env.LOGSEQ_ELECTRON_EXECUTABLE,
-      env: { ...process.env, LOGSEQ_INLINE_DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'logseq-inline-test-')) },
+      env: { ...process.env, LOGSEQ_INLINE_DATA_DIR: testRoot },
     })
     : await chromium.launch({
       ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}),
@@ -18,6 +20,14 @@ async function main () {
   const page = desktop ? await browser.firstWindow()
     : await browser.newPage({ viewport: { width: 1440, height: 1080 } })
   try {
+    if (desktop) {
+      const paths = await browser.evaluate(({ app }) => ({
+        home: app.getPath('home'), profile: app.getPath('userData'), homeEnv: process.env.HOME,
+      }))
+      assert.equal(paths.home, os.homedir())
+      assert.equal(paths.homeEnv, process.env.HOME)
+      assert(paths.profile.startsWith(testRoot))
+    }
     page.setDefaultTimeout(15000)
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
@@ -138,6 +148,14 @@ async function main () {
     throw error
   } finally {
     if (desktop) {
+      const canonicalRoot = fs.realpathSync(testRoot)
+      const processes = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' })
+      for (const line of processes.split('\n')) {
+        if (line.includes(` --root-dir ${canonicalRoot} `) && line.includes(' --owner-source electron ')) {
+          const pid = Number(line.trim().split(/\s+/, 1)[0])
+          try { process.kill(pid, 'SIGTERM') } catch (error) { if (error.code !== 'ESRCH') throw error }
+        }
+      }
       // Electron's inspected shutdown can wait on its daemon. This process owns
       // only the disposable test profile; no user graph is opened by the test.
       const child = browser.process()

@@ -7,7 +7,7 @@ const source = fs.readFileSync(path.join(__dirname, '../resources/inline-launche
 for (const custom of [undefined, '/tmp/custom-inline-data']) {
   const paths = {}
   const created = []
-  const env = custom ? { LOGSEQ_INLINE_DATA_DIR: custom } : {}
+  const env = { HOME: '/user/real-home', ...(custom ? { LOGSEQ_INLINE_DATA_DIR: custom } : {}) }
   let loaded = false
   vm.runInNewContext(source, {
     process: { env },
@@ -21,7 +21,9 @@ for (const custom of [undefined, '/tmp/custom-inline-data']) {
       if (name === 'node:path') return path
       if (name === './electron.js') {
         assert.equal(env.LOGSEQ_INLINE_SANDBOX, '1')
-        assert.equal(env.HOME, paths.home)
+        assert.equal(env.HOME, '/user/real-home')
+        assert.equal(paths.home, undefined)
+        assert.equal(env.LOGSEQ_DOTDIR, path.join(custom || '/user/app-data/Logseq Inline', 'home', '.logseq'))
         assert(paths.userData.startsWith(custom || '/user/app-data/Logseq Inline'))
         loaded = true
         return {}
@@ -33,4 +35,4 @@ for (const custom of [undefined, '/tmp/custom-inline-data']) {
   assert.equal(created.length, 2)
   assert.equal(env.LOGSEQ_GRAPHS_DIR, path.join(custom || '/user/app-data/Logseq Inline', 'graphs'))
 }
-console.log('PASS: sandbox paths and environment are set before loading Logseq.')
+console.log('PASS: Logseq directories are isolated; the real HOME and macOS home path remain unchanged.')

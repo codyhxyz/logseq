@@ -1,4 +1,5 @@
 /target
+/artifacts/inline-desktop/
 /classes
 /checkouts
 profiles.clj

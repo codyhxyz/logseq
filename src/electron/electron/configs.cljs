@@ -7,7 +7,8 @@
             [logseq.common.graph-registry :as graph-registry]))
 
 ;; FIXME: move configs.edn to where it should be
-(defonce dot-root (.join node-path (.getPath app "home") ".logseq"))
+(defonce dot-root (or (.-LOGSEQ_DOTDIR js/process.env)
+                     (.join node-path (.getPath app "home") ".logseq")))
 (defonce cfg-root (.getPath app "userData"))
 (defonce cfg-path (.join node-path cfg-root "configs.edn"))
 
