@@ -47,8 +47,9 @@
 
 (defn setup-updater! [^js win]
   ;; manual/auto updater
-  (init-updater {:repo   "logseq/logseq"
-                 :win    win}))
+  (when-not (.-LOGSEQ_INLINE_SANDBOX js/process.env)
+    (init-updater {:repo   "logseq/logseq"
+                  :win    win})))
 
 (defn open-url-handler
   "win - the main window instance (first renderer process)
@@ -407,7 +408,8 @@
                   (js-utils/disableXFrameOptions win)
 
                   (db/ensure-graphs-dir!)
-                  (install-cli-launcher!)
+                  (when-not (.-LOGSEQ_INLINE_SANDBOX js/process.env)
+                    (install-cli-launcher!))
 
                   ;; Windows/Linux: handle deeplink URL passed on first launch via argv
                   (handle-initial-deeplink! win)
@@ -489,7 +491,8 @@
                             {:scheme     FILE_ASSETS_SCHEME
                              :privileges (assoc privileges :stream true)}]))
 
-      (register-default-protocol-client! app)
+      (when-not (.-LOGSEQ_INLINE_SANDBOX js/process.env)
+        (register-default-protocol-client! app))
       (set-app-menu!)
       (i18n/on-locale-change! set-app-menu!)
       (setup-deeplink!)

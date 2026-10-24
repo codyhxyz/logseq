@@ -108,6 +108,7 @@
   (state/set-component! :block/page-cp block/page-cp)
   (state/set-component! :block/inline-text block/inline-text)
   (state/set-component! :block/asset-cp block/asset-cp)
+  (state/set-component! :page/inline-editor page/page-blocks-cp)
   (state/set-component! :editor/box editor/box)
   (state/set-component! :selection/context-menu cp-content/custom-context-menu-content)
   (command-palette/register-global-shortcut-commands))

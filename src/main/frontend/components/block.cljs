@@ -16,6 +16,7 @@
             [frontend.components.block.comments-model :as comments-model]
             [frontend.components.block.drop :as block-drop]
             [frontend.components.block.image :as block-image]
+            [frontend.components.block.inline-expansion :as inline-expansion]
             [frontend.components.block.macros :as block-macros]
             [frontend.components.block.reaction :as block-reaction]
             [frontend.components.block.selection :as block-selection]
@@ -823,6 +824,12 @@
              (not (or (= (.-button e) 1) (.-metaKey e) (.-ctrlKey e))))
         ((:on-pointer-down config) e)
 
+        (and (:on-inline-expand config)
+             (inline-expansion/plain-click?
+              {:button (.-button e) :shift? (.-shiftKey e)
+               :meta? (.-metaKey e) :ctrl? (.-ctrlKey e) :alt? (.-altKey e)}))
+        ((:on-inline-expand config) page)
+
         :else
         (when-not (or (page-util/entity-is-current-page? page)
                       (page-util/entity-is-current-page? page-entity))
@@ -871,7 +878,10 @@
                 untitled? (str " opacity-50"))
        :data-ref page-name
        :data-uuid (some-> (:block/uuid page-entity) str)
-       :title (when recycled? (t :ui/deleted))
+       :title (if recycled?
+                (t :ui/deleted)
+                (when (:on-inline-expand config) (t :block.inline-expansion/toggle)))
+       :aria-expanded (when (:on-inline-expand config) (boolean (:inline-expanded? config)))
        :draggable true
        :on-drag-start (fn [e]
                         (editor-handler/block->data-transfer! page-name e true))
@@ -916,6 +926,9 @@
            [:span {:class (str "icon-emoji-wrap " (when emoji? "as-emoji"))}
             icon])))
 
+     (when (:on-inline-expand config)
+       [:span.inline-expansion-chevron {:aria-hidden true}
+        (ui/icon (if (:inline-expanded? config) "chevron-down" "chevron-right") {:size 11})])
      [:span
       (if (and (coll? children) (seq children))
         (for [child children]
@@ -1325,16 +1338,30 @@
                                               (conj refs block-uuid uuid-or-title)))))
         show-brackets? (if (some? show-brackets?) show-brackets? (state/show-brackets?))
         contents-page? (= "contents" (string/lower-case (str id)))
-        config' (assoc config
+        expansion-key (inline-expansion/reference-key (:inline-path config*) uuid-or-title)
+        *expansions (:inline-expansions config*)
+        expandable? (and *expansions
+                         (entity/page? block)
+                         (not config/publishing?)
+                         (not (or html-export? (:preview? config*) (:property? config*) (:tag? config*))))
+        config' (cond-> (assoc config
                        :label (mldoc/plain->text label)
                        :contents-page? contents-page?
                        :show-icon? true?
                        :with-tags? false)
+                  expandable?
+                  (assoc :disable-preview? true
+                         :inline-expanded? (boolean (some #(= expansion-key (:key %)) @*expansions))
+                         :on-inline-expand
+                         (fn [target]
+                           (swap! *expansions inline-expansion/toggle expansion-key (:block/uuid target)))))
         asset? (some? (:logseq.property.asset/type block))
         brackets? (and (or show-brackets? nested-link?)
                        (not html-export?)
                        (not contents-page?))]
-    (when-not (and (:db/id block) (= (:db/id block) (:db/id (:block config))))
+    (when-not (and (not expandable?)
+                  (or (contains? (:ref-set config*) uuid-or-title)
+                      (and (:db/id block) (= (:db/id block) (:db/id (:block config))))))
       (cond
         (and asset? (img-audio-video? block))
         (asset-cp config block)
@@ -1420,7 +1447,7 @@
                         (:block/uuid reference))
           self-reference? (when (set? (:ref-set config))
                             (contains? (:ref-set config) uuid-or-title))]
-      (when-not self-reference?
+      (when-not (and self-reference? (not (:inline-expansions config)))
         (if page-uuid
           (subscribed-page-reference config uuid-or-title label page-uuid reference)
           (looked-up-page-reference config uuid-or-title label))))))
@@ -4120,6 +4147,54 @@
                  (on-error error)))}
    view))
 
+(hsx/defc inline-expansion-panel
+  [ancestor-ids {:keys [key target]} *expansions]
+  (let [{:keys [status value error]} (db-hooks/use-block-projection-snapshot target identity)
+        container-id (state/use-container-id)
+        cycle? (inline-expansion/cycle? ancestor-ids target)]
+    [:section.ls-inline-expansion
+     {:data-target (str target)
+      :data-expansion-key (pr-str key)
+      :data-cycle cycle?
+      :containerid container-id}
+     [:div.ls-inline-expansion-header
+      [:div.ls-inline-expansion-title
+       (if value
+         (page-cp {:disable-preview? true} value)
+         (t :block.inline-expansion/label))]
+      (shui/button
+       {:variant :ghost :size :icon
+        :class "ls-inline-expansion-close"
+        :title (t :block.inline-expansion/close)
+        :aria-label (t :block.inline-expansion/close)
+        :on-pointer-down util/stop
+        :on-click (fn [e]
+                    (util/stop e)
+                    (editor-handler/save-current-block-before-navigate!)
+                    (swap! *expansions inline-expansion/close key))}
+       (ui/icon "x" {:size 14}))]
+     (cond
+       cycle?
+       [:div.ls-inline-expansion-message {:role "status"}
+        (t :block.inline-expansion/cycle)]
+
+       (= status :error)
+       (throw error)
+
+       (= status :missing)
+       [:div.ls-inline-expansion-message (t :block/ref-not-exist)]
+
+       value
+       [:div.ls-inline-expansion-body
+        (when-let [editor (state/get-component :page/inline-editor)]
+          (editor value {:container-id container-id
+                         :inline-ancestors (conj ancestor-ids target)
+                         :ref-set #{}
+                         :hide-add-button? false}))]
+
+       :else
+       [:div.ls-inline-expansion-message (ui/loading)])]))
+
 (hsx/defc ^:large-vars/cleanup-todo block-container-inner-aux
   [container-state repo config* block {:keys [child-uuids editing? navigated? navigating-block
                                               render-children selected?]
@@ -4163,6 +4238,23 @@
         config* (if original-block
                   (assoc config* :original-block original-block)
                   config*)
+        *inline-expansions (hooks/use-memo #(atom []) [(:block/uuid block)])
+        [inline-expansions] (hooks/use-atom *inline-expansions)
+        _inline-reference-cleanup
+        (hooks/use-effect!
+         (fn []
+           (let [ast (:block.temp/ast-title (block/parse-title-and-body block))]
+             (swap! *inline-expansions inline-expansion/retain-keys
+                    (inline-expansion/reference-keys ast))))
+         [(:block/title block)])
+        inline-ancestors (cond-> (conj (or (:inline-ancestors config*) #{}) (:block/uuid block))
+                           (and (string? (:id config*))
+                                (util/uuid-string? (:id config*)))
+                           (conj (parse-uuid (:id config*))))
+        config* (assoc config*
+                       :inline-expansions *inline-expansions
+                       :inline-path []
+                       :inline-ancestors inline-ancestors)
         ref? (:ref? config*)
         edit-input-id (str "edit-block-" (:block/uuid block))
         container-id (:container-id config*)
@@ -4420,6 +4512,12 @@
                    (not table?)
                    (not property?))
           (block-comment-thread-button uuid))])
+
+     (when (seq inline-expansions)
+       [:div.ls-inline-expansions.ls-block-content-indent
+        (for [expansion inline-expansions]
+          ^{:key (:key expansion)}
+          [inline-expansion-panel inline-ancestors expansion *inline-expansions])])
 
      (when inline-comment-thread-uuid
        [:div.ls-inline-comments
@@ -4723,7 +4821,9 @@
 
 (defn map-inline
   [config col]
-  (map #(inline config %) col))
+  (map-indexed (fn [index item]
+                 (inline (update config :inline-path (fnil conj []) index) item))
+               col))
 
 (hsx/defc inline-title
   [config title]

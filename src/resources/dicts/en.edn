@@ -112,6 +112,10 @@
  :asset/transfer-placeholder "{1} asset..."
  :asset/uploading "Uploading"
 
+ :block.inline-expansion/close "Close inline editor"
+ :block.inline-expansion/cycle "This page is already open above this link. Collapse a parent expansion to explore it here."
+ :block.inline-expansion/label "Linked page"
+ :block.inline-expansion/toggle "Expand or collapse this page inline"
  :block/click-to-fix-query "Click to fix query: {1}"
  :block/copy-ref "Copy block ref"
  :block/copy-url "Copy block URL"

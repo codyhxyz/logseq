@@ -112,6 +112,10 @@
  :asset/transfer-placeholder "{1}资源..."
  :asset/uploading "上传中"
 
+ :block.inline-expansion/close "关闭内嵌编辑器"
+ :block.inline-expansion/cycle "此页面已在此链接上方展开。请先折叠上级展开内容，再在此处浏览。"
+ :block.inline-expansion/label "链接页面"
+ :block.inline-expansion/toggle "展开或折叠此页面的内嵌编辑器"
  :block/click-to-fix-query "点击修复查询：{1}"
  :block/copy-ref "复制块引用"
  :block/copy-url "复制块 URL"

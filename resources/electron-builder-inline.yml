@@ -1,0 +1,24 @@
+appId: com.codyhxyz.logseq-inline
+productName: Logseq Inline
+extraMetadata:
+  main: inline-launcher.cjs
+directories:
+  output: ../artifacts/inline-desktop
+protocols: []
+publish: null
+files:
+  - "**/*"
+  - "!dist/**"
+  - "!mobile/**"
+  - "!db-worker-node.js"
+  - "!tests*.js"
+  - "!**/*.map"
+  - "!**/node_modules/**/*.{ts,cts,mts}"
+  - "!**/node_modules/**/{test,tests,__tests__,examples}/**"
+extraResources:
+  - from: ../sidecar
+    to: sidecar
+mac:
+  icon: icons/logseq_big_sur.icns
+  hardenedRuntime: false
+  identity: null
