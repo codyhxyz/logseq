@@ -49,6 +49,19 @@ Its launcher separates preferences, plugins, and graph storage.
 It preserves the real home directory so macOS can access the normal Keychain.
 It does not install the CLI, register the stock protocol, or enable upstream application updates.
 
+To use existing graphs in place, create `inline-config.json` in that directory:
+
+```json
+{
+  "graphsDir": "/absolute/path/to/existing/graphs"
+}
+```
+
+The directory must exist.
+This setting selects the original databases, not copies.
+Preferences and plugins remain separate.
+Close stock Logseq before the custom app opens these graphs.
+
 For tests, `LOGSEQ_INLINE_DATA_DIR` selects another isolated directory.
 Keep this directory separate from real graph storage.
 

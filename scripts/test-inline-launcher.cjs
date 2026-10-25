@@ -5,6 +5,7 @@ const vm = require('node:vm')
 
 const source = fs.readFileSync(path.join(__dirname, '../resources/inline-launcher.cjs'), 'utf8')
 for (const custom of [undefined, '/tmp/custom-inline-data']) {
+ for (const existingGraphs of [undefined, '/user/existing-graphs']) {
   const paths = {}
   const created = []
   const env = { HOME: '/user/real-home', ...(custom ? { LOGSEQ_INLINE_DATA_DIR: custom } : {}) }
@@ -17,7 +18,15 @@ for (const custom of [undefined, '/tmp/custom-inline-data']) {
         setPath: (key, value) => { paths[key] = value },
         setName: value => assert.equal(value, 'Logseq Inline'),
       } }
-      if (name === 'node:fs') return { mkdirSync: directory => created.push(directory) }
+      if (name === 'node:fs') return {
+        mkdirSync: directory => created.push(directory),
+        existsSync: () => existingGraphs !== undefined,
+        readFileSync: () => JSON.stringify({ graphsDir: existingGraphs }),
+        statSync: directory => {
+          assert.equal(directory, existingGraphs)
+          return { isDirectory: () => true }
+        },
+      }
       if (name === 'node:path') return path
       if (name === './electron.js') {
         assert.equal(env.LOGSEQ_INLINE_SANDBOX, '1')
@@ -33,6 +42,7 @@ for (const custom of [undefined, '/tmp/custom-inline-data']) {
   })
   assert(loaded)
   assert.equal(created.length, 2)
-  assert.equal(env.LOGSEQ_GRAPHS_DIR, path.join(custom || '/user/app-data/Logseq Inline', 'graphs'))
+  assert.equal(env.LOGSEQ_GRAPHS_DIR, existingGraphs || path.join(custom || '/user/app-data/Logseq Inline', 'graphs'))
+ }
 }
-console.log('PASS: Logseq directories are isolated; the real HOME and macOS home path remain unchanged.')
+console.log('PASS: default graphs stay isolated; configured graphs use their original path; HOME and macOS home remain unchanged.')
