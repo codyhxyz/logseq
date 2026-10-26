@@ -6,6 +6,69 @@ const path = require('node:path')
 const os = require('node:os')
 const { execFileSync } = require('node:child_process')
 
+async function assertQuietFrame (page, panel, reference) {
+  const session = await page.context().newCDPSession(page)
+  await session.send('DOM.enable')
+  await session.send('CSS.enable')
+  // Check hover styling independently of native window focus.
+  async function forceHover (selector, hover) {
+    const { root } = await session.send('DOM.getDocument')
+    const { nodeId } = await session.send('DOM.querySelector', { nodeId: root.nodeId, selector })
+    assert(nodeId, `Missing hover target: ${selector}`)
+    await session.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: hover ? ['hover'] : [] })
+  }
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(mode => logseq.api.set_theme_mode(mode), theme)
+    await page.waitForFunction(mode => document.documentElement.dataset.theme === mode, theme)
+    const appearance = await panel.evaluate(node => {
+      const style = getComputedStyle(node)
+      const title = node.querySelector('.ls-inline-expansion-title a.page-ref')
+      return {
+        borders: ['Top', 'Right', 'Bottom', 'Left'].map(side => ({
+          width: style[`border${side}Width`], color: style[`border${side}Color`],
+        })),
+        background: style.backgroundColor,
+        pageBackground: getComputedStyle(document.body).backgroundColor,
+        headerBorder: getComputedStyle(node.querySelector('.ls-inline-expansion-header')).borderBottomWidth,
+        titleColor: getComputedStyle(title).color,
+        textColor: getComputedStyle(document.body).color,
+        titleExpands: title.hasAttribute('aria-expanded'),
+      }
+    })
+    assert(appearance.borders.every(border =>
+      border.width === '1px' && border.color === appearance.borders[0].color))
+    assert.equal(appearance.background, appearance.pageBackground)
+    assert.equal(appearance.headerBorder, '0px')
+    assert.equal(appearance.titleColor, appearance.textColor)
+    assert.equal(appearance.titleExpands, false)
+    const referenceStyle = await reference.evaluate(node => ({
+      background: getComputedStyle(node).backgroundColor,
+      color: getComputedStyle(node).color,
+    }))
+    assert.notEqual(referenceStyle.background, 'rgba(0, 0, 0, 0)')
+    assert.notEqual(referenceStyle.background, appearance.background)
+    assert.equal(referenceStyle.color, appearance.textColor)
+    await forceHover('.ls-inline-expansion-title a.page-ref', true)
+    assert.match(await panel.locator('.ls-inline-expansion-title a.page-ref').first()
+      .evaluate(node => getComputedStyle(node).textDecorationLine), /underline/)
+    await forceHover('.ls-inline-expansion-title a.page-ref', false)
+  }
+  await page.evaluate(() => logseq.api.set_theme_mode('light'))
+  const close = panel.locator(':scope > .ls-inline-expansion-header button')
+  await reference.focus()
+  await page.mouse.move(0, 0)
+  await page.waitForFunction(() => [...document.querySelectorAll('.ls-inline-expansion-close')]
+    .every(node => getComputedStyle(node).opacity === '0'))
+  await close.focus()
+  await page.waitForFunction(() =>
+    getComputedStyle(document.activeElement).opacity === '1')
+  await reference.focus()
+  await forceHover('.ls-inline-expansion', true)
+  assert.equal(await close.evaluate(node => getComputedStyle(node).opacity), '1')
+  await forceHover('.ls-inline-expansion', false)
+  await session.detach()
+}
+
 async function main () {
   const desktop = Boolean(process.env.LOGSEQ_ELECTRON_EXECUTABLE)
   const testRoot = desktop ? fs.mkdtempSync(path.join(os.tmpdir(), 'logseq-inline-test-')) : null
@@ -59,6 +122,7 @@ async function main () {
     await firstPanel.locator('.block-content').filter({ hasText: 'What would make' }).waitFor()
     assert.equal(await page.locator('.ls-inline-expansion').count(), 1)
     assert.equal(await questionRefs.first().getAttribute('aria-expanded'), 'true')
+    await assertQuietFrame(page, firstPanel, questionRefs.first())
     await questionRefs.nth(1).click()
     await page.waitForFunction(() => document.querySelectorAll('.ls-inline-expansion').length === 2)
     const questionRows = page.locator(`.ls-inline-expansion .ls-block[blockid="${fixture.question.uuid}"]`)
@@ -111,7 +175,15 @@ async function main () {
     assert(freshBlocks.some(block => block.content.includes('A thought written three levels deep.')))
     const outputDir = path.resolve(__dirname, '../tmp/inline-expansion-evidence')
     fs.mkdirSync(outputDir, { recursive: true })
+    const panelBackgrounds = await page.locator('.ls-inline-expansion').evaluateAll(nodes =>
+      nodes.map(node => getComputedStyle(node).backgroundColor))
+    assert.equal(new Set(panelBackgrounds).size, 1, 'Nested pages must keep the same surface')
+    await page.mouse.move(0, 0)
     await page.screenshot({ path: path.join(outputDir, 'nested-editors.png'), fullPage: true })
+    await page.evaluate(() => logseq.api.set_theme_mode('dark'))
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
+    await page.screenshot({ path: path.join(outputDir, 'nested-editors-dark.png'), fullPage: true })
+    await page.evaluate(() => logseq.api.set_theme_mode('light'))
     // Closing while typing must persist through the normal editor lifecycle.
     await questionRows.first().locator('.block-content').first().click({ position: { x: 20, y: 10 } })
     await editor.fill('Saved when closing the expansion.')
@@ -138,7 +210,7 @@ async function main () {
     await sourceRow.locator('.ls-inline-expansion[data-cycle="true"]').waitFor()
     assert.equal(await sourceRow.locator('.ls-inline-expansion .ls-block').count(), 0)
     assert.deepEqual(errors, [])
-    console.log(`PASS (${desktop ? 'packaged desktop' : 'browser'}): independent occurrences, native editing, shared updates, recursive expansion, ancestor cycles, native new-page autocomplete, new linked-page blocks, save-on-close, undo/redo; no runtime exceptions.`)
+    console.log(`PASS (${desktop ? 'packaged desktop' : 'browser'}): quiet frame in light/dark, hover/keyboard close controls, independent occurrences, native editing, shared updates, recursive expansion, ancestor cycles, native new-page autocomplete, new linked-page blocks, save-on-close, undo/redo; no runtime exceptions.`)
   } catch (error) {
     console.error(error)
     await page.screenshot({ path: '/tmp/logseq-inline-test-failure.png', fullPage: true })

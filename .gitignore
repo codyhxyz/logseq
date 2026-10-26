@@ -1,5 +1,6 @@
 /target
 /artifacts/inline-desktop/
+/artifacts/inline-quiet-frame/
 /classes
 /checkouts
 profiles.clj

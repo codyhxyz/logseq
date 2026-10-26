@@ -12,16 +12,27 @@
   opacity: 0.65;
 }
 
+.page-ref[aria-expanded="true"] {
+  background: var(--rx-cyan-04);
+  border-radius: 3px;
+  padding: 0 3px;
+  box-decoration-break: clone;
+
+  &,
+  &:hover {
+    color: var(--lx-gray-12, var(--ls-primary-text-color));
+  }
+}
+
 .ls-inline-expansions {
   min-width: 0;
 }
 
 .ls-inline-expansion {
-  margin: 8px 0 14px;
-  border: 1px solid var(--ls-border-color);
-  border-left: 2px solid var(--ls-link-text-color);
+  margin: 12px 0 18px;
+  border: 1px solid color-mix(in oklab, currentColor 18%, transparent);
   border-radius: 5px;
-  background: var(--ls-secondary-background-color);
+  background: var(--lx-gray-01, var(--ls-primary-background-color));
   min-width: 0;
 
   &-header {
@@ -29,36 +40,71 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 5px 10px;
-    border-bottom: 1px solid var(--ls-border-color);
+    padding: 12px 18px 0;
     font-size: 13px;
   }
 
   &-title {
     min-width: 0;
     overflow-wrap: anywhere;
-    font-weight: 500;
+    font-weight: 600;
+
+    .page-ref {
+      &,
+      &:hover {
+        color: var(--lx-gray-12, var(--ls-primary-text-color));
+      }
+
+      &:hover {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+    }
+
+    .page-reference:hover {
+      background: transparent;
+    }
   }
 
   &-close {
     flex-shrink: 0;
     width: 26px;
     height: 26px;
+    color: var(--lx-gray-11, var(--ls-secondary-text-color));
   }
 
   &-body {
-    padding: 8px 10px 8px 4px;
+    padding: 8px 18px 16px 4px;
     min-width: 0;
+
+    .ls-inline-expansions {
+      padding-left: 18px;
+    }
+
+    .ls-inline-expansion-header {
+      padding: 10px 14px 0;
+    }
+
+    .ls-inline-expansion-body {
+      padding: 6px 14px 12px 0;
+    }
   }
 
   &-message {
-    padding: 10px 12px;
+    padding: 10px 18px 16px;
     font-size: 12px;
     color: var(--ls-secondary-text-color);
   }
 
-  &[data-cycle="true"] {
-    border-left-color: var(--ls-warning-text-color, #b18b4c);
+  @media (hover: hover) and (pointer: fine) {
+    &-close {
+      opacity: 0;
+    }
+
+    &:hover > .ls-inline-expansion-header .ls-inline-expansion-close,
+    &:focus-within > .ls-inline-expansion-header .ls-inline-expansion-close {
+      opacity: 1;
+    }
   }
 }
 

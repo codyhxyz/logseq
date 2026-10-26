@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { unsignedBuildEnv } from './electron-builder-unsigned.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const output = path.resolve(root, process.env.LOGSEQ_INLINE_OUTPUT_DIR || 'artifacts/inline-desktop')
 function run (command, args, cwd = root, env = process.env) {
   const result = spawnSync(command, args, { cwd, env, stdio: 'inherit' })
   if (result.error) throw result.error
@@ -43,4 +44,4 @@ cpSync(path.join(root, '.agents/skills/logseq-cli'), path.join(staging, '.agents
 run('pnpm', ['install', '--ignore-workspace', '--frozen-lockfile'], staging)
 run('pnpm', ['exec', 'electron-builder', '--config', 'electron-builder-inline.yml',
   '--mac', 'dir', '--arm64', '--publish', 'never',
-  `-c.directories.output=${path.join(root, 'artifacts/inline-desktop')}`], staging, unsignedBuildEnv())
+  `-c.directories.output=${output}`], staging, unsignedBuildEnv())

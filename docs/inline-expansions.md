@@ -33,6 +33,15 @@ Expansion state belongs to the current view.
 It does not change the graph schema or synchronize between devices.
 Changes to a block's structure can close its expansions.
 
+## Appearance
+
+Inline editors use a thin neutral frame and the normal page background.
+Expanded references have a cyan background.
+Page titles retain normal navigation and show an underline on hover.
+Close buttons appear on hover or keyboard focus on desktop.
+Touch devices always show the close buttons.
+Nested editors use less padding and keep the same background.
+
 ## Data separation
 
 The custom app uses this directory:
@@ -93,6 +102,16 @@ If the release artifacts already match the source, package them with:
 ```bash
 node scripts/build-inline-desktop.mjs --package-only
 ```
+
+If the current app is running, build into a separate directory:
+
+```bash
+LOGSEQ_INLINE_OUTPUT_DIR=artifacts/inline-quiet-frame \
+  node scripts/build-inline-desktop.mjs --package-only
+```
+
+This command does not replace the running app.
+After the build passes its tests, quit the current app before opening the new build.
 
 The app is not signed or notarized.
 macOS can require approval under System Settings → Privacy & Security.
